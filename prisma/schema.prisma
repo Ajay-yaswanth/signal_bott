@@ -1,0 +1,128 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+  EXPIRED
+}
+
+enum SignalDirection {
+  BUY
+  SELL
+  WAIT
+}
+
+enum SignalStatus {
+  ACTIVE
+  CLOSED
+  EXPIRED
+}
+
+enum SignalResult {
+  TP1
+  TP2
+  TP3
+  SL
+  BE
+  PENDING
+}
+
+model User {
+  id             String         @id @default(cuid())
+  name           String
+  email          String         @unique
+  passwordHash   String
+  role           UserRole       @default(USER)
+  trialEndsAt    DateTime?
+  subscriptions  Subscription[]
+  payments       Payment[]
+  auditLogs      AuditLog[]
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@index([role])
+  @@index([trialEndsAt])
+}
+
+model Subscription {
+  id                       String             @id @default(cuid())
+  userId                   String
+  user                     User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status                   SubscriptionStatus @default(TRIAL)
+  razorpayCustomerId       String?
+  razorpaySubscriptionId   String?            @unique
+  currentPeriodEnd         DateTime?
+  createdAt                DateTime           @default(now())
+  updatedAt                DateTime           @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([razorpayCustomerId])
+  @@index([currentPeriodEnd])
+}
+
+model Signal {
+  id          String          @id @default(cuid())
+  symbol      String
+  direction   SignalDirection
+  entry       Decimal?        @db.Decimal(12, 2)
+  stopLoss    Decimal?        @db.Decimal(12, 2)
+  tp1         Decimal?        @db.Decimal(12, 2)
+  tp2         Decimal?        @db.Decimal(12, 2)
+  tp3         Decimal?        @db.Decimal(12, 2)
+  confidence  Int
+  bias        String
+  reason      String
+  status      SignalStatus    @default(ACTIVE)
+  result      SignalResult    @default(PENDING)
+  points      Decimal?        @db.Decimal(10, 2)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([symbol])
+  @@index([direction])
+  @@index([status])
+  @@index([result])
+  @@index([createdAt])
+}
+
+model Payment {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  razorpayPaymentId String   @unique
+  amount            Int
+  currency          String   @default("INR")
+  status            String
+  createdAt         DateTime @default(now())
+
+  @@index([userId])
+  @@index([status])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action    String
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+}
