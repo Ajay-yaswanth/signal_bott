@@ -1,10 +1,10 @@
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 enum UserRole {
@@ -42,32 +42,32 @@ enum SignalResult {
 }
 
 model User {
-  id             String         @id @default(cuid())
-  name           String
-  email          String         @unique
-  passwordHash   String
-  role           UserRole       @default(USER)
-  trialEndsAt    DateTime?
-  subscriptions  Subscription[]
-  payments       Payment[]
-  auditLogs      AuditLog[]
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
+  id            String         @id @default(cuid())
+  name          String
+  email         String         @unique
+  passwordHash  String
+  role          UserRole       @default(USER)
+  trialEndsAt   DateTime?
+  subscriptions Subscription[]
+  payments      Payment[]
+  auditLogs     AuditLog[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
 
   @@index([role])
   @@index([trialEndsAt])
 }
 
 model Subscription {
-  id                       String             @id @default(cuid())
-  userId                   String
-  user                     User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  status                   SubscriptionStatus @default(TRIAL)
-  razorpayCustomerId       String?
-  razorpaySubscriptionId   String?            @unique
-  currentPeriodEnd         DateTime?
-  createdAt                DateTime           @default(now())
-  updatedAt                DateTime           @updatedAt
+  id                     String             @id @default(cuid())
+  userId                 String
+  user                   User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status                 SubscriptionStatus @default(TRIAL)
+  razorpayCustomerId     String?
+  razorpaySubscriptionId String?            @unique
+  currentPeriodEnd       DateTime?
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
 
   @@index([userId])
   @@index([status])
@@ -76,22 +76,22 @@ model Subscription {
 }
 
 model Signal {
-  id          String          @id @default(cuid())
-  symbol      String
-  direction   SignalDirection
-  entry       Decimal?        @db.Decimal(12, 2)
-  stopLoss    Decimal?        @db.Decimal(12, 2)
-  tp1         Decimal?        @db.Decimal(12, 2)
-  tp2         Decimal?        @db.Decimal(12, 2)
-  tp3         Decimal?        @db.Decimal(12, 2)
-  confidence  Int
-  bias        String
-  reason      String
-  status      SignalStatus    @default(ACTIVE)
-  result      SignalResult    @default(PENDING)
-  points      Decimal?        @db.Decimal(10, 2)
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
+  id         String          @id @default(cuid())
+  symbol     String
+  direction  SignalDirection
+  entry      Decimal?        @db.Decimal(12, 2)
+  stopLoss   Decimal?        @db.Decimal(12, 2)
+  tp1        Decimal?        @db.Decimal(12, 2)
+  tp2        Decimal?        @db.Decimal(12, 2)
+  tp3        Decimal?        @db.Decimal(12, 2)
+  confidence Int
+  bias       String
+  reason     String
+  status     SignalStatus    @default(ACTIVE)
+  result     SignalResult    @default(PENDING)
+  points     Decimal?        @db.Decimal(10, 2)
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
 
   @@index([symbol])
   @@index([direction])
