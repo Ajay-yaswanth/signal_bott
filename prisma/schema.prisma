@@ -4,7 +4,6 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 enum UserRole {
@@ -53,9 +52,6 @@ model User {
   auditLogs     AuditLog[]
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
-
-  @@index([role])
-  @@index([trialEndsAt])
 }
 
 model Subscription {
@@ -68,11 +64,6 @@ model Subscription {
   currentPeriodEnd       DateTime?
   createdAt              DateTime           @default(now())
   updatedAt              DateTime           @updatedAt
-
-  @@index([userId])
-  @@index([status])
-  @@index([razorpayCustomerId])
-  @@index([currentPeriodEnd])
 }
 
 model Signal {
@@ -92,12 +83,6 @@ model Signal {
   points     Decimal?        @db.Decimal(10, 2)
   createdAt  DateTime        @default(now())
   updatedAt  DateTime        @updatedAt
-
-  @@index([symbol])
-  @@index([direction])
-  @@index([status])
-  @@index([result])
-  @@index([createdAt])
 }
 
 model Payment {
@@ -109,9 +94,6 @@ model Payment {
   currency          String   @default("INR")
   status            String
   createdAt         DateTime @default(now())
-
-  @@index([userId])
-  @@index([status])
 }
 
 model AuditLog {
@@ -121,8 +103,4 @@ model AuditLog {
   action    String
   metadata  Json?
   createdAt DateTime @default(now())
-
-  @@index([userId])
-  @@index([action])
-  @@index([createdAt])
 }
