@@ -6,6 +6,10 @@ import { redirect } from "next/navigation";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { PageHeader } from "@/components/layout/page-header";
 import {
+  LatestSignalsList,
+  type LatestSignalItem,
+} from "@/components/trading/latest-signals-list";
+import {
   SignalHistoryView,
   type SignalHistoryItem,
 } from "@/components/trading/signal-history-view";
@@ -40,10 +44,16 @@ export default async function SignalsPage({
   }
 
   const filters = parseSignalHistoryFilters(await searchParams);
-  const signals = await prisma.signal.findMany({
-    where: buildSignalHistoryWhere(filters),
-    orderBy: { createdAt: "desc" },
-  });
+  const [signals, latestSignals] = await Promise.all([
+    prisma.signal.findMany({
+      where: buildSignalHistoryWhere(filters),
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.signal.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 3,
+    }),
+  ]);
   const items: SignalHistoryItem[] = signals.map((signal) => ({
     id: signal.id,
     symbol: signal.symbol,
@@ -58,6 +68,26 @@ export default async function SignalsPage({
       day: "numeric",
       month: "short",
       year: "numeric",
+    }),
+  }));
+  const latestItems: LatestSignalItem[] = latestSignals.map((signal) => ({
+    id: signal.id,
+    symbol: signal.symbol,
+    direction: signal.direction,
+    entry: signal.entry?.toFixed(2) ?? null,
+    stopLoss: signal.stopLoss?.toFixed(2) ?? null,
+    tp1: signal.tp1?.toFixed(2) ?? null,
+    tp2: signal.tp2?.toFixed(2) ?? null,
+    tp3: signal.tp3?.toFixed(2) ?? null,
+    confidence: signal.confidence,
+    bias: signal.bias,
+    reason: signal.reason,
+    status: signal.status,
+    createdAt: signal.createdAt.toLocaleString("en-IN", {
+      day: "numeric",
+      month: "short",
+      hour: "numeric",
+      minute: "2-digit",
     }),
   }));
   const exportQuery = signalHistoryQuery(filters);
@@ -77,6 +107,8 @@ export default async function SignalsPage({
           </Button>
         }
       />
+
+      <LatestSignalsList signals={latestItems} />
 
       <form
         method="get"
