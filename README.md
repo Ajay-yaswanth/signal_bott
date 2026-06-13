@@ -78,7 +78,7 @@ Never expose `NEXTAUTH_SECRET`, Razorpay secrets, or `ULTRON_BOT_API_KEY` to bro
 
 ## Database
 
-Prisma is configured in `prisma/schema.prisma` and `prisma.config.ts`. The generated client is emitted to `src/generated/prisma`. Razorpay amounts are stored as integer minor units, so `149900` represents INR 1,499.00.
+Prisma is configured in `prisma/schema.prisma` and `prisma.config.ts`. The generated client is emitted to `node_modules/@prisma/client`. Razorpay amounts are stored as integer minor units, so `149900` represents INR 1,499.00.
 
 For local schema changes, run `npm run db:migrate`. In production, apply committed migrations with:
 

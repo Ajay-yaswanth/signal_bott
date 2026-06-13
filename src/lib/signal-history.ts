@@ -1,4 +1,4 @@
-import type { Prisma } from "@/generated/prisma/client";
+import type { Prisma } from "@prisma/client";
 
 const directions = ["BUY", "SELL", "WAIT"] as const;
 const results = ["TP1", "TP2", "TP3", "SL", "BE", "PENDING"] as const;

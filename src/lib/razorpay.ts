@@ -2,7 +2,7 @@ import "server-only";
 
 import { createHmac, timingSafeEqual } from "node:crypto";
 
-import type { SubscriptionStatus } from "@/generated/prisma/client";
+import type { SubscriptionStatus } from "@prisma/client";
 
 const RAZORPAY_API_URL = "https://api.razorpay.com/v1";
 

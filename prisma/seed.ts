@@ -1,7 +1,5 @@
 import "dotenv/config";
-import { PrismaPg } from "@prisma/adapter-pg";
-import { hash } from "bcrypt";
-
+import { PrismaNeon } from "@prisma/adapter-neon";
 import {
   PrismaClient,
   SignalDirection,
@@ -9,10 +7,11 @@ import {
   SignalStatus,
   SubscriptionStatus,
   UserRole,
-} from "../src/generated/prisma/client";
+} from "@prisma/client";
+import { hash } from "bcrypt";
 
-const adapter = new PrismaPg({
-  connectionString: `${process.env.DATABASE_URL}`,
+const adapter = new PrismaNeon({
+  connectionString: process.env.DATABASE_URL,
 });
 
 const prisma = new PrismaClient({ adapter });
