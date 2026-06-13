@@ -9,15 +9,6 @@ export const registerSchema = loginSchema.extend({
   name: z.string().min(2, "Name must be at least 2 characters."),
 });
 
-export const signalSchema = z.object({
-  symbol: z.string().min(2).max(12),
-  side: z.enum(["BUY", "SELL"]),
-  entry: z.coerce.number().positive(),
-  stopLoss: z.coerce.number().positive(),
-  takeProfit: z.coerce.number().positive(),
-  confidence: z.coerce.number().min(0).max(100),
-});
-
 const optionalPrice = z.preprocess(
   (value) => (value === "" || value === undefined ? null : value),
   z.coerce.number().positive().nullable(),
@@ -28,23 +19,40 @@ const optionalPoints = z.preprocess(
   z.coerce.number().nullable(),
 );
 
-export const createAdminSignalSchema = z.object({
-  symbol: z
-    .string()
-    .trim()
-    .min(2, "Symbol must be at least 2 characters.")
-    .max(12)
-    .transform((value) => value.toUpperCase()),
-  direction: z.enum(["BUY", "SELL", "WAIT"]),
-  entry: optionalPrice,
-  stopLoss: optionalPrice,
-  tp1: optionalPrice,
-  tp2: optionalPrice,
-  tp3: optionalPrice,
-  confidence: z.coerce.number().int().min(0).max(100),
-  bias: z.string().trim().min(3, "Market bias is required.").max(180),
-  reason: z.string().trim().min(10, "Add a clear ICT/SMC reason.").max(2000),
-});
+export const createAdminSignalSchema = z
+  .object({
+    symbol: z
+      .string()
+      .trim()
+      .min(2, "Symbol must be at least 2 characters.")
+      .max(12)
+      .transform((value) => value.toUpperCase()),
+    direction: z.enum(["BUY", "SELL", "WAIT"]),
+    entry: optionalPrice,
+    stopLoss: optionalPrice,
+    tp1: optionalPrice,
+    tp2: optionalPrice,
+    tp3: optionalPrice,
+    confidence: z.coerce.number().int().min(0).max(100),
+    bias: z.string().trim().min(3, "Market bias is required.").max(180),
+    reason: z.string().trim().min(10, "Add a clear ICT/SMC reason.").max(2000),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.direction === "WAIT") {
+      return;
+    }
+
+    for (const field of ["entry", "stopLoss", "tp1", "tp2", "tp3"] as const) {
+      if (value[field] === null) {
+        context.addIssue({
+          code: "custom",
+          path: [field],
+          message: `${field} is required for ${value.direction} signals.`,
+        });
+      }
+    }
+  });
 
 export const updateAdminSignalSchema = z
   .object({
@@ -111,9 +119,3 @@ export const botPublishSignalSchema = z
       }
     }
   });
-
-export const envSchema = z.object({
-  DATABASE_URL: z.string().url(),
-  NEXTAUTH_SECRET: z.string().min(24),
-  NEXTAUTH_URL: z.string().url().optional(),
-});

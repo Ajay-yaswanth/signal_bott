@@ -50,6 +50,7 @@ function FormMessage({
 
   return (
     <p
+      aria-live="polite"
       className={
         error
           ? "rounded-lg border border-red-400/30 bg-red-400/10 px-3 py-2 text-sm text-red-200"
@@ -96,7 +97,7 @@ function CreateSignalForm() {
       }
 
       form.reset();
-      setSuccess("Signal created and audit log recorded.");
+      setSuccess("Signal published and audit log recorded.");
       router.refresh();
     } catch {
       setError("Unable to reach the signal service. Try again.");
@@ -108,7 +109,7 @@ function CreateSignalForm() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Create new signal</CardTitle>
+        <CardTitle>Publish new signal</CardTitle>
         <p className="text-sm text-muted-foreground">
           Publish a validated live signal for users with active access.
         </p>
@@ -167,7 +168,7 @@ function CreateSignalForm() {
                   type="number"
                   min="0"
                   step="0.01"
-                  placeholder="Optional"
+                  placeholder="Required for BUY / SELL"
                 />
               </div>
             ))}
@@ -198,7 +199,7 @@ function CreateSignalForm() {
             ) : (
               <Plus aria-hidden="true" />
             )}
-            {isLoading ? "Creating" : "Create signal"}
+            {isLoading ? "Publishing" : "Publish signal"}
           </Button>
         </form>
       </CardContent>

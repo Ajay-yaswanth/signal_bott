@@ -1,5 +1,8 @@
 # ULTRON Signals
 
+Testing, Prisma migration, cron, environment, and deployment instructions are
+documented in [DEPLOYMENT.md](./DEPLOYMENT.md).
+
 Production-ready XAUUSD signal SaaS with live signal publishing, trade history, performance analytics, subscriptions, and audited admin workflows.
 
 ## Stack
@@ -31,7 +34,7 @@ Production-ready XAUUSD signal SaaS with live signal publishing, trade history, 
 
 - Node.js 20+
 - PostgreSQL 15+
-- Razorpay account and recurring monthly plan for billing
+- Razorpay account with Subscriptions enabled
 
 ## Local Setup
 
@@ -69,9 +72,7 @@ Open [http://localhost:3000](http://localhost:3000).
 | `NEXTAUTH_URL` | Yes | Canonical application URL and auth callback origin |
 | `RAZORPAY_KEY_ID` | Yes | Public Razorpay checkout key returned by the server |
 | `RAZORPAY_KEY_SECRET` | Yes | Private Razorpay API secret |
-| `RAZORPAY_MONTHLY_PLAN_ID` | Yes | Razorpay recurring monthly plan |
 | `RAZORPAY_WEBHOOK_SECRET` | Yes | Verifies Razorpay webhook signatures |
-| `RAZORPAY_SUBSCRIPTION_TOTAL_COUNT` | No | Billing-cycle cap; defaults to `120` |
 | `ULTRON_BOT_API_KEY` | Yes | Authenticates bot signal publishing |
 
 Never expose `NEXTAUTH_SECRET`, Razorpay secrets, or `ULTRON_BOT_API_KEY` to browser code.
@@ -88,18 +89,21 @@ npx prisma migrate deploy
 
 ## Authentication And Access
 
-Authentication uses NextAuth credentials with Prisma-backed users and bcrypt password hashes. Registration creates a three-day trial. Dashboard routes require authentication, and `/admin` plus `/api/admin/*` require the `ADMIN` role.
+Authentication uses NextAuth credentials with Prisma-backed users and bcrypt password hashes. Registration does not grant free access. Dashboard routes require authentication, and `/admin` plus `/api/admin/*` require the `ADMIN` role.
 
-Dashboard signal details remain blocked after trial expiry unless the user has an active subscription.
+Dashboard signal details remain blocked unless the user has an active paid
+two-day trial or recurring subscription.
 
 ## Razorpay Setup
 
-1. Create a monthly recurring plan and set `RAZORPAY_MONTHLY_PLAN_ID`.
-2. Configure the webhook URL as `https://your-domain.com/api/razorpay/webhook`.
-3. Subscribe to payment success/failure and subscription lifecycle events.
-4. Set the same webhook signing secret in `RAZORPAY_WEBHOOK_SECRET`.
+1. Configure the webhook URL as `https://your-domain.com/api/razorpay/webhook`.
+2. Subscribe to payment success/failure and subscription lifecycle events.
+3. Set the same webhook signing secret in `RAZORPAY_WEBHOOK_SECRET`.
+4. Pricing plans are created server-side from the local billing catalog.
 
 Checkout signatures and webhooks are verified server-side. Secrets are never sent to the frontend.
+The ₹9 paid trial, future subscription start, and cancellation flow are
+documented in [DEPLOYMENT.md](./DEPLOYMENT.md).
 
 ## Bot Signal API
 
@@ -112,7 +116,8 @@ curl -X POST http://localhost:3000/api/signals/publish \
   -d '{"symbol":"XAUUSD","direction":"BUY","entry":2338.40,"stopLoss":2327.20,"tp1":2348,"tp2":2356.50,"tp3":2364.80,"confidence":92,"bias":"Bullish liquidity reclaim","reason":"Sell-side liquidity sweep followed by bullish displacement and fair-value-gap confirmation."}'
 ```
 
-Authenticated dashboard users with an active trial or subscription can fetch the current XAUUSD signal from `GET /api/signals/latest`.
+Authenticated dashboard users with an active paid trial or subscription can
+fetch the current XAUUSD signal from `GET /api/signals/latest`.
 
 After seeding, demo credentials are:
 

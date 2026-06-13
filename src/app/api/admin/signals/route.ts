@@ -21,34 +21,43 @@ export async function POST(request: Request) {
     );
   }
 
-  const signal = await prisma.$transaction(async (transaction) => {
-    const created = await transaction.signal.create({
-      data: {
-        ...parsed.data,
-        status: "ACTIVE",
-        result: "PENDING",
-      },
-      select: {
-        id: true,
-        symbol: true,
-        direction: true,
-      },
-    });
-
-    await transaction.auditLog.create({
-      data: {
-        userId: admin.id,
-        action: "SIGNAL_CREATED",
-        metadata: {
-          signalId: created.id,
-          symbol: created.symbol,
-          direction: created.direction,
+  try {
+    const signal = await prisma.$transaction(async (transaction) => {
+      const created = await transaction.signal.create({
+        data: {
+          ...parsed.data,
+          status: "ACTIVE",
+          result: "PENDING",
         },
-      },
+        select: {
+          id: true,
+          symbol: true,
+          direction: true,
+        },
+      });
+
+      await transaction.auditLog.create({
+        data: {
+          userId: admin.id,
+          action: "SIGNAL_CREATED",
+          metadata: {
+            signalId: created.id,
+            symbol: created.symbol,
+            direction: created.direction,
+          },
+        },
+      });
+
+      return created;
     });
 
-    return created;
-  });
+    return NextResponse.json({ signal }, { status: 201 });
+  } catch (error) {
+    console.error("Unable to create admin signal.", error);
 
-  return NextResponse.json({ signal }, { status: 201 });
+    return NextResponse.json(
+      { error: "Unable to save the signal. Please try again." },
+      { status: 500 },
+    );
+  }
 }

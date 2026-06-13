@@ -1,10 +1,9 @@
-import { CreditCard, IndianRupee, ShieldCheck, Users } from "lucide-react";
+import { CreditCard, ShieldCheck, Users } from "lucide-react";
 import { redirect } from "next/navigation";
 
 import { AdminSignalManager } from "@/components/admin/admin-signal-manager";
+import { TradingOperationsDashboard } from "@/components/admin/trading-operations-dashboard";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
-import { PageHeader } from "@/components/layout/page-header";
-import { StatCard } from "@/components/trading/stat-card";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -12,109 +11,170 @@ import { getAdminUser } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 
 export const metadata = {
-  title: "Admin",
-  description:
-    "Manage ULTRON Signals users, subscriptions, payments, and live signals.",
+  title: "Strategy Command Center",
+  description: "Professional signal operations and AI strategy monitoring.",
   robots: { index: false, follow: false },
 };
 
 export const dynamic = "force-dynamic";
 
+function utcDayStart() {
+  const now = new Date();
+  return new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+  );
+}
+
+function currentMarketSession(at = new Date()) {
+  const hour = at.getUTCHours();
+  if (hour >= 12 && hour < 17) return "NEW YORK";
+  if (hour >= 7 && hour < 12) return "LONDON";
+  if (hour >= 17 && hour < 21) return "LATE SESSION";
+  return "ASIA";
+}
+
+function formatTime(value: Date) {
+  return value.toLocaleString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function formatCurrency(amount: number) {
   return new Intl.NumberFormat("en-IN", {
     style: "currency",
     currency: "INR",
-    maximumFractionDigits: 2,
+    maximumFractionDigits: 0,
   }).format(amount / 100);
-}
-
-function formatDate(value: Date | null) {
-  return value
-    ? value.toLocaleDateString("en-IN", {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      })
-    : "--";
 }
 
 export default async function AdminPage() {
   const admin = await getAdminUser();
+  if (!admin) redirect("/dashboard");
 
-  if (!admin) {
-    redirect("/dashboard");
-  }
-
-  const monthStart = new Date();
-  monthStart.setDate(1);
-  monthStart.setHours(0, 0, 0, 0);
-
+  const now = new Date();
+  const dayStart = utcDayStart();
   const [
     signals,
+    liveSignals,
+    sniperEntries,
+    dailySignals,
+    activeUsers,
+    resultGroups,
+    statusGroups,
     users,
-    subscriptions,
-    payments,
-    totalRevenue,
-    monthlyRevenue,
-    activeSubscriptions,
-    recentAuditLogs,
+    activeTrials,
+    billingSubscriptions,
+    failedPayments,
   ] = await Promise.all([
     prisma.signal.findMany({
-      orderBy: { updatedAt: "desc" },
-      take: 20,
+      orderBy: { createdAt: "desc" },
+      take: 30,
+      include: { strategyScore: true },
+    }),
+    prisma.signal.count({ where: { status: "ACTIVE" } }),
+    prisma.signal.count({
+      where: { status: "ACTIVE", signalType: "SNIPER" },
+    }),
+    prisma.signal.count({ where: { createdAt: { gte: dayStart } } }),
+    prisma.user.count({
+      where: {
+        OR: [
+          {
+            trialAccess: {
+              is: { status: "ACTIVE", endsAt: { gt: now } },
+            },
+          },
+          { subscriptions: { some: { status: "ACTIVE" } } },
+        ],
+      },
+    }),
+    prisma.signal.groupBy({
+      by: ["result"],
+      _count: { _all: true },
+    }),
+    prisma.signal.groupBy({
+      by: ["status"],
+      _count: { _all: true },
     }),
     prisma.user.findMany({
       orderBy: { createdAt: "desc" },
+      take: 50,
       include: {
         subscriptions: {
           orderBy: { createdAt: "desc" },
           take: 1,
+          include: { plan: true },
         },
+        trialAccess: true,
+      },
+    }),
+    prisma.trialAccess.findMany({
+      where: { status: "ACTIVE", endsAt: { gt: now } },
+      orderBy: { endsAt: "asc" },
+      include: {
+        user: { select: { name: true, email: true } },
+        subscription: { include: { plan: true } },
       },
     }),
     prisma.subscription.findMany({
-      orderBy: { createdAt: "desc" },
+      orderBy: { updatedAt: "desc" },
+      take: 50,
       include: {
-        user: {
-          select: { name: true, email: true },
-        },
+        user: { select: { name: true, email: true } },
+        plan: true,
       },
     }),
     prisma.payment.findMany({
+      where: { status: { in: ["failed", "created"] } },
       orderBy: { createdAt: "desc" },
-      take: 20,
-      include: {
-        user: {
-          select: { name: true, email: true },
-        },
-      },
-    }),
-    prisma.payment.aggregate({
-      where: { status: "captured" },
-      _sum: { amount: true },
-    }),
-    prisma.payment.aggregate({
-      where: {
-        status: "captured",
-        createdAt: { gte: monthStart },
-      },
-      _sum: { amount: true },
-    }),
-    prisma.subscription.count({
-      where: { status: "ACTIVE" },
-    }),
-    prisma.auditLog.findMany({
-      orderBy: { createdAt: "desc" },
-      take: 15,
-      include: {
-        user: {
-          select: { name: true, email: true },
-        },
-      },
+      take: 50,
+      include: { user: { select: { name: true, email: true } } },
     }),
   ]);
 
-  const signalItems = signals.map((signal) => ({
+  const resultCount = Object.fromEntries(
+    resultGroups.map((group) => [group.result, group._count._all]),
+  );
+  const statusCount = Object.fromEntries(
+    statusGroups.map((group) => [group.status, group._count._all]),
+  );
+  const wins =
+    (resultCount.TP1 ?? 0) + (resultCount.TP2 ?? 0) + (resultCount.TP3 ?? 0);
+  const losses = resultCount.SL ?? 0;
+  const winRate =
+    wins + losses === 0 ? 0 : Math.round((wins / (wins + losses)) * 100);
+
+  const tradingSignals = signals.map((signal) => ({
+    id: signal.id,
+    symbol: signal.symbol,
+    direction: signal.direction,
+    signalType: signal.signalType,
+    session: signal.session,
+    status: signal.status,
+    result: signal.result,
+    confidence: signal.confidence,
+    entry: signal.entry?.toFixed(2) ?? null,
+    bias: signal.bias,
+    createdAt: formatTime(signal.createdAt),
+    score: signal.strategyScore
+      ? {
+          trend: signal.strategyScore.trendScore,
+          liquiditySweep: signal.strategyScore.liquiditySweepScore,
+          fvg: signal.strategyScore.fvgQualityScore,
+          orderBlock: signal.strategyScore.orderBlockQualityScore,
+          rsi: signal.strategyScore.rsiScore,
+          adx: signal.strategyScore.adxScore,
+          atr: signal.strategyScore.atrScore,
+          session: signal.strategyScore.sessionScore,
+          newsRisk: signal.strategyScore.newsRiskScore,
+        }
+      : null,
+  }));
+
+  const managedSignals = signals.slice(0, 20).map((signal) => ({
     id: signal.id,
     symbol: signal.symbol,
     direction: signal.direction,
@@ -129,84 +189,190 @@ export default async function AdminPage() {
     status: signal.status,
     result: signal.result,
     points: signal.points?.toFixed(2) ?? null,
-    updatedAt: signal.updatedAt.toLocaleString("en-IN", {
-      day: "numeric",
-      month: "short",
-      hour: "numeric",
-      minute: "2-digit",
-    }),
+    updatedAt: formatTime(signal.updatedAt),
   }));
 
   return (
     <DashboardShell active="/admin">
-      <PageHeader
-        eyebrow="Administration"
-        title="Admin dashboard"
-        description="Create and manage signals, review users and subscriptions, monitor revenue, and inspect audit activity."
-        action={
-          <Badge variant="secondary">
-            <ShieldCheck className="mr-1 size-3" aria-hidden="true" />
-            ADMIN
-          </Badge>
-        }
-      />
+      <header className="mb-6 overflow-hidden rounded-2xl border border-primary/20 bg-[linear-gradient(135deg,rgba(16,20,32,0.98),rgba(4,8,18,0.96))] p-6 shadow-[0_30px_100px_rgba(0,0,0,0.38)]">
+        <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="secondary">
+                <ShieldCheck className="mr-1 size-3" aria-hidden="true" />
+                ADMIN COMMAND
+              </Badge>
+              <Badge variant="success">ENGINE ONLINE</Badge>
+            </div>
+            <h1 className="mt-5 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+              Strategy command center
+            </h1>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">
+              Monitor live execution, sniper-grade opportunities, signal
+              outcomes, market sessions, and AI strategy confidence from one
+              professional desk.
+            </p>
+          </div>
+          <div className="rounded-xl border border-primary/20 bg-primary/[0.06] px-5 py-4 lg:text-right">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+              Desk operator
+            </p>
+            <p className="mt-2 font-semibold text-white">{admin.name}</p>
+            <p className="mt-1 text-xs text-primary">{admin.email}</p>
+          </div>
+        </div>
+      </header>
 
-      <section className="mb-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          label="Total users"
-          value={users.length.toLocaleString()}
-          change={`${users.filter((user) => user.role === "ADMIN").length} admins`}
-          icon={Users}
-        />
-        <StatCard
-          label="Active subscriptions"
-          value={activeSubscriptions.toLocaleString()}
-          change={`${subscriptions.filter((item) => item.status === "TRIAL").length} trials`}
-          icon={CreditCard}
-          tone="green"
-        />
-        <StatCard
-          label="Captured revenue"
-          value={formatCurrency(totalRevenue._sum.amount ?? 0)}
-          change="All time"
-          icon={IndianRupee}
-          tone="gold"
-        />
-        <StatCard
-          label="Monthly revenue"
-          value={formatCurrency(monthlyRevenue._sum.amount ?? 0)}
-          change="Current month"
-          icon={IndianRupee}
-          tone="green"
-        />
-      </section>
-
-      <Tabs defaultValue="signals">
-        <TabsList className="max-w-full overflow-x-auto">
-          <TabsTrigger value="signals">Signals</TabsTrigger>
-          <TabsTrigger value="users">Users</TabsTrigger>
-          <TabsTrigger value="subscriptions">Subscriptions</TabsTrigger>
-          <TabsTrigger value="revenue">Revenue</TabsTrigger>
-          <TabsTrigger value="audit">Audit log</TabsTrigger>
+      <Tabs defaultValue="command">
+        <TabsList className="max-w-full overflow-x-auto border-primary/15 bg-[#070c17]/90">
+          <TabsTrigger value="command">Command center</TabsTrigger>
+          <TabsTrigger value="signals">Signal operations</TabsTrigger>
+          <TabsTrigger value="billing">Billing operations</TabsTrigger>
+          <TabsTrigger value="users">User access</TabsTrigger>
         </TabsList>
 
+        <TabsContent value="command">
+          <TradingOperationsDashboard
+            metrics={{
+              liveSignals,
+              sniperEntries,
+              winRate,
+              dailySignals,
+              activeUsers,
+              currentSession: currentMarketSession(now),
+              statusCounts: {
+                active: statusCount.ACTIVE ?? 0,
+                closed: statusCount.CLOSED ?? 0,
+                expired: statusCount.EXPIRED ?? 0,
+              },
+            }}
+            signals={tradingSignals}
+          />
+        </TabsContent>
+
         <TabsContent value="signals">
-          <AdminSignalManager signals={signalItems} />
+          <AdminSignalManager signals={managedSignals} />
+        </TabsContent>
+
+        <TabsContent value="billing">
+          <div className="grid gap-5 xl:grid-cols-3">
+            <Card className="border-primary/15 bg-[#070c17]/90">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <CreditCard className="size-4 text-primary" aria-hidden="true" />
+                  Active paid trials
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {activeTrials.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No active paid trials.</p>
+                ) : (
+                  activeTrials.map((trial) => (
+                    <div key={trial.id} className="rounded-lg border border-white/8 bg-white/[0.025] p-3">
+                      <p className="font-semibold text-white">{trial.user.name}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{trial.user.email}</p>
+                      <p className="mt-2 text-xs text-primary">
+                        {trial.subscription.plan?.name ?? "Legacy plan"} · ends{" "}
+                        {trial.endsAt ? formatTime(trial.endsAt) : "--"}
+                      </p>
+                    </div>
+                  ))
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="border-primary/15 bg-[#070c17]/90">
+              <CardHeader>
+                <CardTitle>Subscriptions</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {billingSubscriptions.slice(0, 12).map((subscription) => (
+                  <div key={subscription.id} className="rounded-lg border border-white/8 bg-white/[0.025] p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="font-semibold text-white">{subscription.user.name}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {subscription.plan?.name ?? "Legacy plan"}
+                        </p>
+                      </div>
+                      <Badge
+                        variant={
+                          subscription.status === "ACTIVE"
+                            ? "success"
+                            : subscription.status === "PAST_DUE"
+                              ? "danger"
+                              : subscription.status === "CANCELLED"
+                                ? "warning"
+                                : "outline"
+                        }
+                      >
+                        {subscription.status}
+                      </Badge>
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+
+            <Card className="border-primary/15 bg-[#070c17]/90">
+              <CardHeader>
+                <CardTitle>Failed payments and cancellations</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {failedPayments.map((payment) => (
+                  <div key={payment.id} className="rounded-lg border border-red-400/15 bg-red-400/[0.035] p-3">
+                    <p className="font-semibold text-white">{payment.user.name}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {formatCurrency(payment.amount)} · {payment.status}
+                    </p>
+                  </div>
+                ))}
+                {billingSubscriptions
+                  .filter((subscription) => subscription.status === "CANCELLED")
+                  .slice(0, 12)
+                  .map((subscription) => (
+                    <div key={subscription.id} className="rounded-lg border border-amber-300/15 bg-amber-300/[0.035] p-3">
+                      <p className="font-semibold text-white">{subscription.user.name}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Cancelled · {subscription.plan?.name ?? "Legacy plan"}
+                      </p>
+                    </div>
+                  ))}
+                {failedPayments.length === 0 &&
+                !billingSubscriptions.some(
+                  (subscription) => subscription.status === "CANCELLED",
+                ) ? (
+                  <p className="text-sm text-muted-foreground">
+                    No failed payments or cancelled users.
+                  </p>
+                ) : null}
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
 
         <TabsContent value="users">
-          <Card>
-            <CardHeader>
-              <CardTitle>All users</CardTitle>
+          <Card className="border-primary/15 bg-[#070c17]/90">
+            <CardHeader className="flex-row items-center justify-between gap-4">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="size-4 text-primary" aria-hidden="true" />
+                  User access
+                </CardTitle>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Latest platform members and access state
+                </p>
+              </div>
+              <Badge variant="secondary">{users.length} shown</Badge>
             </CardHeader>
             <CardContent className="p-0">
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[760px] text-sm">
-                  <thead className="border-y border-white/10 bg-white/[0.03] text-left text-xs uppercase text-muted-foreground">
+                <table className="w-full min-w-[720px] text-left text-sm">
+                  <thead className="border-y border-white/8 bg-black/15 text-[10px] uppercase tracking-[0.16em] text-slate-500">
                     <tr>
-                      {["User", "Role", "Trial ends", "Subscription", "Joined"].map(
+                      {["User", "Role", "Access", "Trial ends", "Joined"].map(
                         (heading) => (
-                          <th key={heading} className="px-4 py-3 font-medium">
+                          <th key={heading} className="px-5 py-3 font-semibold">
                             {heading}
                           </th>
                         ),
@@ -214,197 +380,51 @@ export default async function AdminPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {users.length === 0 ? (
-                      <tr>
-                        <td
-                          colSpan={5}
-                          className="px-4 py-10 text-center text-muted-foreground"
+                    {users.map((user) => {
+                      const subscription = user.subscriptions[0];
+                      const hasTrial = Boolean(
+                        user.trialAccess?.status === "ACTIVE" &&
+                          user.trialAccess.endsAt &&
+                          user.trialAccess.endsAt > now,
+                      );
+                      const hasAccess =
+                        subscription?.status === "ACTIVE" || hasTrial;
+
+                      return (
+                        <tr
+                          key={user.id}
+                          className="border-b border-white/7 last:border-0"
                         >
-                          No users found.
-                        </td>
-                      </tr>
-                    ) : (
-                      users.map((user) => (
-                        <tr key={user.id} className="border-b border-white/10 last:border-0">
-                          <td className="px-4 py-4">
-                            <p className="font-semibold text-foreground">{user.name}</p>
-                            <p className="text-xs text-muted-foreground">{user.email}</p>
+                          <td className="px-5 py-4">
+                            <p className="font-semibold text-white">{user.name}</p>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {user.email}
+                            </p>
                           </td>
-                          <td className="px-4 py-4">
+                          <td className="px-5 py-4">
                             <Badge variant={user.role === "ADMIN" ? "secondary" : "outline"}>
                               {user.role}
                             </Badge>
                           </td>
-                          <td className="px-4 py-4 text-muted-foreground">
-                            {formatDate(user.trialEndsAt)}
-                          </td>
-                          <td className="px-4 py-4">
-                            <Badge
-                              variant={
-                                user.subscriptions[0]?.status === "ACTIVE"
-                                  ? "success"
-                                  : user.subscriptions[0]?.status === "PAST_DUE"
-                                    ? "danger"
-                                    : "warning"
-                              }
-                            >
-                              {user.subscriptions[0]?.status ?? "NONE"}
+                          <td className="px-5 py-4">
+                            <Badge variant={hasAccess ? "success" : "danger"}>
+                              {hasAccess ? "ACTIVE" : "INACTIVE"}
                             </Badge>
                           </td>
-                          <td className="px-4 py-4 text-muted-foreground">
-                            {formatDate(user.createdAt)}
+                          <td className="px-5 py-4 text-xs text-slate-400">
+                            {user.trialAccess?.endsAt
+                              ? formatTime(user.trialAccess.endsAt)
+                              : "--"}
+                          </td>
+                          <td className="px-5 py-4 text-xs text-slate-400">
+                            {formatTime(user.createdAt)}
                           </td>
                         </tr>
-                      ))
-                    )}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="subscriptions">
-          <Card>
-            <CardHeader>
-              <CardTitle>Subscriptions</CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[820px] text-sm">
-                  <thead className="border-y border-white/10 bg-white/[0.03] text-left text-xs uppercase text-muted-foreground">
-                    <tr>
-                      {[
-                        "User",
-                        "Status",
-                        "Razorpay customer",
-                        "Razorpay subscription",
-                        "Period end",
-                      ].map((heading) => (
-                        <th key={heading} className="px-4 py-3 font-medium">
-                          {heading}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {subscriptions.length === 0 ? (
-                      <tr>
-                        <td
-                          colSpan={5}
-                          className="px-4 py-10 text-center text-muted-foreground"
-                        >
-                          No subscription records yet.
-                        </td>
-                      </tr>
-                    ) : (
-                      subscriptions.map((subscription) => (
-                        <tr
-                          key={subscription.id}
-                          className="border-b border-white/10 last:border-0"
-                        >
-                          <td className="px-4 py-4">
-                            <p className="font-semibold text-foreground">
-                              {subscription.user.name}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {subscription.user.email}
-                            </p>
-                          </td>
-                          <td className="px-4 py-4">
-                            <Badge
-                              variant={
-                                subscription.status === "ACTIVE"
-                                  ? "success"
-                                  : subscription.status === "PAST_DUE"
-                                    ? "danger"
-                                    : "warning"
-                              }
-                            >
-                              {subscription.status}
-                            </Badge>
-                          </td>
-                          <td className="px-4 py-4 font-mono text-xs text-muted-foreground">
-                            {subscription.razorpayCustomerId ?? "--"}
-                          </td>
-                          <td className="px-4 py-4 font-mono text-xs text-muted-foreground">
-                            {subscription.razorpaySubscriptionId ?? "--"}
-                          </td>
-                          <td className="px-4 py-4 text-muted-foreground">
-                            {formatDate(subscription.currentPeriodEnd)}
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="revenue">
-          <Card>
-            <CardHeader>
-              <CardTitle>Recent payments</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {payments.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No payment records yet.</p>
-              ) : (
-                payments.map((payment) => (
-                  <div
-                    key={payment.id}
-                    className="flex flex-col justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.03] p-4 sm:flex-row sm:items-center"
-                  >
-                    <div>
-                      <p className="font-semibold text-foreground">{payment.user.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {payment.razorpayPaymentId} | {formatDate(payment.createdAt)}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <Badge variant={payment.status === "captured" ? "success" : "warning"}>
-                        {payment.status}
-                      </Badge>
-                      <p className="font-mono font-semibold text-primary">
-                        {formatCurrency(payment.amount)}
-                      </p>
-                    </div>
-                  </div>
-                ))
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="audit">
-          <Card>
-            <CardHeader>
-              <CardTitle>Recent admin activity</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {recentAuditLogs.length === 0 ? (
-                <p className="py-8 text-center text-sm text-muted-foreground">
-                  No admin activity recorded yet.
-                </p>
-              ) : (
-                recentAuditLogs.map((log) => (
-                  <div
-                    key={log.id}
-                    className="rounded-lg border border-white/10 bg-white/[0.03] p-4"
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <Badge variant="outline">{log.action}</Badge>
-                      <span className="text-xs text-muted-foreground">
-                        {log.createdAt.toLocaleString("en-IN")}
-                      </span>
-                    </div>
-                    <p className="mt-2 text-sm text-foreground">{log.user.name}</p>
-                    <p className="text-xs text-muted-foreground">{log.user.email}</p>
-                  </div>
-                ))
-              )}
             </CardContent>
           </Card>
         </TabsContent>

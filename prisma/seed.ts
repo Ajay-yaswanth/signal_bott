@@ -3,7 +3,7 @@ import { PrismaNeon } from "@prisma/adapter-neon";
 import {
   PrismaClient,
   SignalDirection,
-  SignalResult,
+  SignalOutcome,
   SignalStatus,
   SubscriptionStatus,
   UserRole,
@@ -18,9 +18,6 @@ const prisma = new PrismaClient({ adapter });
 
 async function main() {
   const now = new Date();
-  const trialEndsAt = new Date(now);
-  trialEndsAt.setDate(trialEndsAt.getDate() + 3);
-
   const currentPeriodEnd = new Date(now);
   currentPeriodEnd.setMonth(currentPeriodEnd.getMonth() + 1);
 
@@ -42,7 +39,6 @@ async function main() {
       email: "admin@ultronsignals.com",
       passwordHash: adminPasswordHash,
       role: UserRole.ADMIN,
-      trialEndsAt,
     },
   });
 
@@ -56,19 +52,40 @@ async function main() {
       email: "trader@ultronsignals.com",
       passwordHash: demoPasswordHash,
       role: UserRole.USER,
-      trialEndsAt,
     },
   });
 
-  await prisma.subscription.upsert({
+  const demoPlan = await prisma.plan.upsert({
+    where: { code: "pro-monthly" },
+    update: {},
+    create: {
+      code: "pro-monthly",
+      tier: "PRO",
+      billingCycle: "MONTHLY",
+      name: "Pro",
+      description: "Higher-frequency access for active trading sessions.",
+      amount: 99900,
+      originalAmount: 99900,
+      intervalMonths: 1,
+      sniperSignalsDay: 4,
+      normalSignalsMin: 11,
+      normalSignalsMax: 16,
+      targetPerformance: "Up to 80%",
+      mostPopular: true,
+    },
+  });
+
+  const demoSubscription = await prisma.subscription.upsert({
     where: { razorpaySubscriptionId: "sub_ultron_demo_pro" },
     update: {
       status: SubscriptionStatus.ACTIVE,
       currentPeriodEnd,
+      planId: demoPlan.id,
     },
     create: {
       userId: demoUser.id,
       status: SubscriptionStatus.ACTIVE,
+      planId: demoPlan.id,
       razorpayCustomerId: "cust_ultron_demo",
       razorpaySubscriptionId: "sub_ultron_demo_pro",
       currentPeriodEnd,
@@ -80,6 +97,7 @@ async function main() {
     update: {},
     create: {
       userId: demoUser.id,
+      subscriptionId: demoSubscription.id,
       razorpayPaymentId: "pay_ultron_demo_001",
       amount: 14900,
       currency: "INR",
@@ -103,7 +121,7 @@ async function main() {
         reason:
           "London sweep reclaimed with buyers holding above session VWAP and momentum confirming higher-low structure.",
         status: SignalStatus.ACTIVE,
-        result: SignalResult.PENDING,
+        result: SignalOutcome.PENDING,
         points: null,
       },
     },
@@ -122,7 +140,7 @@ async function main() {
         reason:
           "NY session failed to accept above prior-day high after an upper imbalance rejection.",
         status: SignalStatus.ACTIVE,
-        result: SignalResult.PENDING,
+        result: SignalOutcome.PENDING,
         points: null,
       },
     },
@@ -141,7 +159,7 @@ async function main() {
         reason:
           "Gold held demand after a stop sweep and completed continuation into the second target.",
         status: SignalStatus.CLOSED,
-        result: SignalResult.TP2,
+        result: SignalOutcome.TP2,
         points: "18.30",
       },
     },
@@ -160,7 +178,7 @@ async function main() {
         reason:
           "Market is inside a noisy range. Waiting for clean liquidity break before issuing direction.",
         status: SignalStatus.ACTIVE,
-        result: SignalResult.PENDING,
+        result: SignalOutcome.PENDING,
         points: null,
       },
     },
@@ -179,7 +197,7 @@ async function main() {
         reason:
           "Sell-side setup invalidated after price accepted above the premium array and displaced through the stop.",
         status: SignalStatus.CLOSED,
-        result: SignalResult.SL,
+        result: SignalOutcome.SL,
         points: "-9.50",
         createdAt: daysAgo(4),
       },
@@ -199,7 +217,7 @@ async function main() {
         reason:
           "Price swept sell-side liquidity, filled the discount fair-value gap, and expanded through all targets.",
         status: SignalStatus.CLOSED,
-        result: SignalResult.TP3,
+        result: SignalOutcome.TP3,
         points: "31.10",
         createdAt: daysAgo(8),
       },
@@ -219,7 +237,7 @@ async function main() {
         reason:
           "Initial displacement stalled after entry, so risk was removed at breakeven before reversal.",
         status: SignalStatus.CLOSED,
-        result: SignalResult.BE,
+        result: SignalOutcome.BE,
         points: "0.00",
         createdAt: daysAgo(12),
       },

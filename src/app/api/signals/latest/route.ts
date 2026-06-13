@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { hasActiveSignalAccess } from "@/lib/signal-access";
 
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
@@ -35,15 +36,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "User not found." }, { status: 404 });
   }
 
-  const now = new Date();
-  const trialIsActive = Boolean(user.trialEndsAt && user.trialEndsAt > now);
-  const activeSubscription = user.subscriptions.find(
-    (subscription) =>
-      subscription.status === "ACTIVE" &&
-      (!subscription.currentPeriodEnd || subscription.currentPeriodEnd > now),
-  );
-
-  if (!trialIsActive && !activeSubscription) {
+  if (!hasActiveSignalAccess(user)) {
     return NextResponse.json(
       {
         success: false,

@@ -25,9 +25,6 @@ export async function POST(request: Request) {
     );
   }
 
-  const trialEndsAt = new Date();
-  trialEndsAt.setDate(trialEndsAt.getDate() + 3);
-
   const passwordHash = await hash(parsed.data.password, 12);
 
   const user = await prisma.user.create({
@@ -35,19 +32,13 @@ export async function POST(request: Request) {
       name: parsed.data.name,
       email,
       passwordHash,
-      trialEndsAt,
-      subscriptions: {
-        create: {
-          status: "TRIAL",
-          currentPeriodEnd: trialEndsAt,
-        },
-      },
+      trialEndsAt: null,
       auditLogs: {
         create: {
           action: "USER_REGISTERED",
           metadata: {
             source: "credentials",
-            trialDays: 3,
+            freeTrial: false,
           },
         },
       },
@@ -55,7 +46,6 @@ export async function POST(request: Request) {
     select: {
       id: true,
       email: true,
-      trialEndsAt: true,
     },
   });
 

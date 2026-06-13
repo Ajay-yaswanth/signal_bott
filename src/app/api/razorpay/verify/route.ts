@@ -67,6 +67,9 @@ export async function POST(request: Request) {
     const subscriptionStatus = mapRazorpaySubscriptionStatus(
       razorpaySubscription.status,
     );
+    const paidTrialStartsAt = new Date();
+    const paidTrialEndsAt = new Date(paidTrialStartsAt.getTime() + 2 * 86_400_000);
+    const paidTrialCaptured = payment.status === "captured";
 
     await prisma.$transaction([
       prisma.subscription.update({
@@ -94,6 +97,16 @@ export async function POST(request: Request) {
           status: payment.status,
         },
       }),
+      ...(paidTrialCaptured
+        ? [
+            prisma.user.update({
+              where: { id: session.user.id },
+              data: {
+                trialEndsAt: paidTrialEndsAt,
+              },
+            }),
+          ]
+        : []),
       prisma.auditLog.create({
         data: {
           userId: session.user.id,
@@ -103,12 +116,18 @@ export async function POST(request: Request) {
             paymentId,
             subscriptionStatus,
             paymentStatus: payment.status,
+            paidTrialStartsAt: paidTrialStartsAt.toISOString(),
+            paidTrialEndsAt: paidTrialEndsAt.toISOString(),
+            paidTrialCaptured,
           },
         },
       }),
     ]);
 
-    return NextResponse.json({ status: subscriptionStatus });
+    return NextResponse.json({
+      status: subscriptionStatus,
+      paidTrialStatus: paidTrialCaptured ? "ACTIVE" : "PENDING",
+    });
   } catch (error) {
     console.error("Unable to verify Razorpay checkout", error);
     return NextResponse.json(

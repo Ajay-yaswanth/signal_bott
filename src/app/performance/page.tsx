@@ -1,7 +1,7 @@
 import { Download, Target, TrendingUp } from "lucide-react";
 
 import { PerformanceChart } from "@/components/charts/performance-chart";
-import { AppShell } from "@/components/layout/app-shell";
+import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,7 +23,7 @@ export const metadata = {
 
 export default function PerformancePage() {
   return (
-    <AppShell active="/performance">
+    <DashboardShell active="/performance">
       <PageHeader
         eyebrow="Analytics"
         title="Performance"
@@ -107,6 +107,6 @@ export default function PerformancePage() {
           </div>
         </TabsContent>
       </Tabs>
-    </AppShell>
+    </DashboardShell>
   );
 }

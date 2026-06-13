@@ -4,17 +4,21 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 
 import type { SubscriptionStatus } from "@prisma/client";
 
+import { PAID_TRIAL } from "@/lib/billing-plans";
+
 const RAZORPAY_API_URL = "https://api.razorpay.com/v1";
 
-type RazorpaySubscription = {
+export type RazorpaySubscription = {
   id: string;
   status: string;
   customer_id?: string | null;
+  current_start?: number | null;
   current_end?: number | null;
+  start_at?: number | null;
   notes?: Record<string, string>;
 };
 
-type RazorpayPayment = {
+export type RazorpayPayment = {
   id: string;
   amount: number;
   currency: string;
@@ -22,23 +26,20 @@ type RazorpayPayment = {
   notes?: Record<string, string>;
 };
 
+type RazorpayPlan = {
+  id: string;
+};
+
 export function getRazorpayConfig() {
   const keyId = process.env.RAZORPAY_KEY_ID;
   const keySecret = process.env.RAZORPAY_KEY_SECRET;
-  const planId = process.env.RAZORPAY_MONTHLY_PLAN_ID;
   const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
 
-  if (!keyId || !keySecret || !planId || !webhookSecret) {
+  if (!keyId || !keySecret || !webhookSecret) {
     throw new Error("Razorpay environment variables are not configured.");
   }
 
-  return {
-    keyId,
-    keySecret,
-    planId,
-    webhookSecret,
-    totalCount: Number(process.env.RAZORPAY_SUBSCRIPTION_TOTAL_COUNT ?? 120),
-  };
+  return { keyId, keySecret, webhookSecret };
 }
 
 async function razorpayRequest<T>(path: string, init?: RequestInit) {
@@ -61,29 +62,83 @@ async function razorpayRequest<T>(path: string, init?: RequestInit) {
   return (await response.json()) as T;
 }
 
+export function createRazorpayPlan(plan: {
+  name: string;
+  description: string;
+  amount: number;
+  intervalMonths: number;
+  code: string;
+}) {
+  return razorpayRequest<RazorpayPlan>("/plans", {
+    method: "POST",
+    body: JSON.stringify({
+      period: "monthly",
+      interval: plan.intervalMonths,
+      item: {
+        name: `${plan.name} ${plan.intervalMonths === 1 ? "Monthly" : "3-Month"}`,
+        amount: plan.amount,
+        currency: "INR",
+        description: plan.description,
+      },
+      notes: { planCode: plan.code },
+    }),
+  });
+}
+
 export function createRazorpaySubscription({
+  planId,
+  planCode,
+  intervalMonths,
   userId,
   email,
+  startAt,
 }: {
+  planId: string;
+  planCode: string;
+  intervalMonths: number;
   userId: string;
   email: string;
+  startAt: Date;
 }) {
-  const { planId, totalCount } = getRazorpayConfig();
-
   return razorpayRequest<RazorpaySubscription>("/subscriptions", {
     method: "POST",
     body: JSON.stringify({
       plan_id: planId,
-      total_count: totalCount,
+      total_count: intervalMonths === 1 ? 120 : 40,
       quantity: 1,
       customer_notify: 1,
+      start_at: Math.floor(startAt.getTime() / 1000),
+      addons: [
+        {
+          item: {
+            name: "ULTRON Signals 2-Day Paid Trial",
+            amount: PAID_TRIAL.offerAmount,
+            currency: "INR",
+          },
+        },
+      ],
       notes: {
         userId,
         email,
-        product: "ULTRON Signals Monthly",
+        planCode,
+        paidTrial: "2-days",
+        autopayConsent: "true",
       },
     }),
   });
+}
+
+export function cancelRazorpaySubscription(
+  subscriptionId: string,
+  cancelAtCycleEnd = true,
+) {
+  return razorpayRequest<RazorpaySubscription>(
+    `/subscriptions/${encodeURIComponent(subscriptionId)}/cancel`,
+    {
+      method: "POST",
+      body: JSON.stringify({ cancel_at_cycle_end: cancelAtCycleEnd ? 1 : 0 }),
+    },
+  );
 }
 
 export function fetchRazorpaySubscription(subscriptionId: string) {
@@ -102,8 +157,10 @@ export function mapRazorpaySubscriptionStatus(
   status: string,
 ): SubscriptionStatus {
   switch (status) {
-    case "active":
+    case "created":
     case "authenticated":
+      return "TRIAL";
+    case "active":
       return "ACTIVE";
     case "pending":
     case "halted":
@@ -114,7 +171,7 @@ export function mapRazorpaySubscriptionStatus(
     case "expired":
       return "EXPIRED";
     default:
-      return "TRIAL";
+      return "CREATED";
   }
 }
 

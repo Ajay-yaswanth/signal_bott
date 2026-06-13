@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth";
 
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { hasActiveSignalAccess } from "@/lib/signal-access";
 import {
   buildSignalHistoryWhere,
   parseSignalHistoryFilters,
@@ -17,6 +18,15 @@ export async function GET(request: Request) {
 
   if (!session?.user.id) {
     return new Response("Unauthorized", { status: 401 });
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    include: { subscriptions: true },
+  });
+
+  if (!user || !hasActiveSignalAccess(user)) {
+    return new Response("Active subscription required", { status: 403 });
   }
 
   const filters = parseSignalHistoryFilters(new URL(request.url).searchParams);
