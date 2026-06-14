@@ -55,37 +55,15 @@ async function main() {
     },
   });
 
-  const demoPlan = await prisma.plan.upsert({
-    where: { code: "pro-monthly" },
-    update: {},
-    create: {
-      code: "pro-monthly",
-      tier: "PRO",
-      billingCycle: "MONTHLY",
-      name: "Pro",
-      description: "Higher-frequency access for active trading sessions.",
-      amount: 99900,
-      originalAmount: 99900,
-      intervalMonths: 1,
-      sniperSignalsDay: 4,
-      normalSignalsMin: 11,
-      normalSignalsMax: 16,
-      targetPerformance: "Up to 80%",
-      mostPopular: true,
-    },
-  });
-
-  const demoSubscription = await prisma.subscription.upsert({
+  await prisma.subscription.upsert({
     where: { razorpaySubscriptionId: "sub_ultron_demo_pro" },
     update: {
       status: SubscriptionStatus.ACTIVE,
       currentPeriodEnd,
-      planId: demoPlan.id,
     },
     create: {
       userId: demoUser.id,
       status: SubscriptionStatus.ACTIVE,
-      planId: demoPlan.id,
       razorpayCustomerId: "cust_ultron_demo",
       razorpaySubscriptionId: "sub_ultron_demo_pro",
       currentPeriodEnd,
@@ -97,7 +75,6 @@ async function main() {
     update: {},
     create: {
       userId: demoUser.id,
-      subscriptionId: demoSubscription.id,
       razorpayPaymentId: "pay_ultron_demo_001",
       amount: 14900,
       currency: "INR",

@@ -111,12 +111,18 @@ Core:
 ```text
 DATABASE_URL
 NEXTAUTH_SECRET
+AUTH_SECRET
 NEXTAUTH_URL
 CRON_SECRET
 ULTRON_STRATEGY_API_KEY
 ULTRON_BOT_API_KEY
 MARKET_DATA_PROVIDER
 ```
+
+Set `NEXTAUTH_SECRET` and `AUTH_SECRET` to the same strong production secret.
+Set `NEXTAUTH_URL` to the production HTTPS origin, for example
+`https://your-domain.com`; never use localhost for the Vercel Production
+environment.
 
 For TwelveData forex:
 
@@ -202,6 +208,12 @@ plan before offering it to customers.
 ## Deployment Checklist
 
 - Create a backup or Neon branch before changing the production schema.
+- Confirm the Vercel Git repository is `Ajay-yaswanth/signal_bott`.
+- Confirm the Vercel Production Branch is `main`.
+- Confirm the Vercel Root Directory is the repository root (`.`).
+- Confirm Framework Preset is `Next.js`, Build Command is `npm run build`, and
+  the Output Directory override is empty.
+- Confirm the Ignored Build Step does not skip commits on `main`.
 - Confirm `npm install` completes.
 - Confirm `npm run test:run`, `npm run lint`, and `npm run build` pass.
 - Confirm `npm run db:migrate:status` succeeds against the target database.
@@ -211,7 +223,12 @@ plan before offering it to customers.
 - Set `NEXTAUTH_URL` to the production HTTPS URL.
 - Confirm the selected market provider is configured and reachable.
 - Confirm the Vercel plan supports the configured cron frequency.
-- Deploy, then verify login, admin authorization, premium locking, and billing.
+- Redeploy the latest `main` deployment with **Use existing Build Cache**
+  disabled.
+- Hard refresh the production site, then test the production URL with
+  `?v=latest` appended to bypass browser/CDN URL caching.
+- Verify the deployment source commit matches the latest `main` commit.
+- Verify login, admin authorization, premium locking, and billing.
 - Verify `/api/strategy/scan` rejects requests without valid authorization.
 - Review Vercel logs after the first cron executions.
 - Monitor signal outcomes and risk controls; do not represent signals as

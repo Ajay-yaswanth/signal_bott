@@ -171,7 +171,7 @@ export function mapRazorpaySubscriptionStatus(
     case "expired":
       return "EXPIRED";
     default:
-      return "CREATED";
+      return "TRIAL";
   }
 }
 

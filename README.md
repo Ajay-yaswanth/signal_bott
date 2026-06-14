@@ -69,13 +69,16 @@ Open [http://localhost:3000](http://localhost:3000).
 | --- | --- | --- |
 | `DATABASE_URL` | Yes | PostgreSQL connection used by Prisma |
 | `NEXTAUTH_SECRET` | Yes | Signs Auth.js session tokens |
+| `AUTH_SECRET` | Yes | Auth.js compatibility secret; use the same value as `NEXTAUTH_SECRET` |
 | `NEXTAUTH_URL` | Yes | Canonical application URL and auth callback origin |
 | `RAZORPAY_KEY_ID` | Yes | Public Razorpay checkout key returned by the server |
 | `RAZORPAY_KEY_SECRET` | Yes | Private Razorpay API secret |
 | `RAZORPAY_WEBHOOK_SECRET` | Yes | Verifies Razorpay webhook signatures |
 | `ULTRON_BOT_API_KEY` | Yes | Authenticates bot signal publishing |
 
-Never expose `NEXTAUTH_SECRET`, Razorpay secrets, or `ULTRON_BOT_API_KEY` to browser code.
+Never expose `NEXTAUTH_SECRET`, `AUTH_SECRET`, Razorpay secrets, or
+`ULTRON_BOT_API_KEY` to browser code. In Vercel Production, `NEXTAUTH_URL`
+must be the production HTTPS origin, never localhost.
 
 ## Database
 

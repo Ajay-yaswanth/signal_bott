@@ -26,8 +26,6 @@ function formatSignal(signal: {
   id: string;
   symbol: string;
   direction: UserSignalItem["direction"];
-  signalType: UserSignalItem["signalType"];
-  session: UserSignalItem["session"];
   entry: { toFixed: (digits: number) => string } | null;
   stopLoss: { toFixed: (digits: number) => string } | null;
   tp1: { toFixed: (digits: number) => string } | null;
@@ -43,8 +41,8 @@ function formatSignal(signal: {
     id: signal.id,
     symbol: signal.symbol,
     direction: signal.direction,
-    signalType: signal.signalType,
-    session: signal.session,
+    signalType: "MANUAL",
+    session: "UNKNOWN",
     entry: signal.entry?.toFixed(2) ?? null,
     stopLoss: signal.stopLoss?.toFixed(2) ?? null,
     tp1: signal.tp1?.toFixed(2) ?? null,

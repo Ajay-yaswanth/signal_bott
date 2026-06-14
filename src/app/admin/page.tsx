@@ -72,21 +72,16 @@ export default async function AdminPage() {
     prisma.signal.findMany({
       orderBy: { createdAt: "desc" },
       take: 30,
-      include: { strategyScore: true },
     }),
     prisma.signal.count({ where: { status: "ACTIVE" } }),
     prisma.signal.count({
-      where: { status: "ACTIVE", signalType: "SNIPER" },
+      where: { status: "ACTIVE", confidence: { gte: 90 } },
     }),
     prisma.signal.count({ where: { createdAt: { gte: dayStart } } }),
     prisma.user.count({
       where: {
         OR: [
-          {
-            trialAccess: {
-              is: { status: "ACTIVE", endsAt: { gt: now } },
-            },
-          },
+          { trialEndsAt: { gt: now } },
           { subscriptions: { some: { status: "ACTIVE" } } },
         ],
       },
@@ -106,25 +101,18 @@ export default async function AdminPage() {
         subscriptions: {
           orderBy: { createdAt: "desc" },
           take: 1,
-          include: { plan: true },
         },
-        trialAccess: true,
       },
     }),
-    prisma.trialAccess.findMany({
-      where: { status: "ACTIVE", endsAt: { gt: now } },
-      orderBy: { endsAt: "asc" },
-      include: {
-        user: { select: { name: true, email: true } },
-        subscription: { include: { plan: true } },
-      },
+    prisma.user.findMany({
+      where: { trialEndsAt: { gt: now } },
+      orderBy: { trialEndsAt: "asc" },
     }),
     prisma.subscription.findMany({
       orderBy: { updatedAt: "desc" },
       take: 50,
       include: {
         user: { select: { name: true, email: true } },
-        plan: true,
       },
     }),
     prisma.payment.findMany({
@@ -151,27 +139,15 @@ export default async function AdminPage() {
     id: signal.id,
     symbol: signal.symbol,
     direction: signal.direction,
-    signalType: signal.signalType,
-    session: signal.session,
+    signalType: "MANUAL" as const,
+    session: "UNKNOWN" as const,
     status: signal.status,
     result: signal.result,
     confidence: signal.confidence,
     entry: signal.entry?.toFixed(2) ?? null,
     bias: signal.bias,
     createdAt: formatTime(signal.createdAt),
-    score: signal.strategyScore
-      ? {
-          trend: signal.strategyScore.trendScore,
-          liquiditySweep: signal.strategyScore.liquiditySweepScore,
-          fvg: signal.strategyScore.fvgQualityScore,
-          orderBlock: signal.strategyScore.orderBlockQualityScore,
-          rsi: signal.strategyScore.rsiScore,
-          adx: signal.strategyScore.adxScore,
-          atr: signal.strategyScore.atrScore,
-          session: signal.strategyScore.sessionScore,
-          newsRisk: signal.strategyScore.newsRiskScore,
-        }
-      : null,
+    score: null,
   }));
 
   const managedSignals = signals.slice(0, 20).map((signal) => ({
@@ -269,11 +245,11 @@ export default async function AdminPage() {
                 ) : (
                   activeTrials.map((trial) => (
                     <div key={trial.id} className="rounded-lg border border-white/8 bg-white/[0.025] p-3">
-                      <p className="font-semibold text-white">{trial.user.name}</p>
-                      <p className="mt-1 text-xs text-muted-foreground">{trial.user.email}</p>
+                      <p className="font-semibold text-white">{trial.name}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{trial.email}</p>
                       <p className="mt-2 text-xs text-primary">
-                        {trial.subscription.plan?.name ?? "Legacy plan"} · ends{" "}
-                        {trial.endsAt ? formatTime(trial.endsAt) : "--"}
+                        Trial access · ends{" "}
+                        {trial.trialEndsAt ? formatTime(trial.trialEndsAt) : "--"}
                       </p>
                     </div>
                   ))
@@ -292,7 +268,7 @@ export default async function AdminPage() {
                       <div>
                         <p className="font-semibold text-white">{subscription.user.name}</p>
                         <p className="mt-1 text-xs text-muted-foreground">
-                          {subscription.plan?.name ?? "Legacy plan"}
+                          Subscription access
                         </p>
                       </div>
                       <Badge
@@ -334,7 +310,7 @@ export default async function AdminPage() {
                     <div key={subscription.id} className="rounded-lg border border-amber-300/15 bg-amber-300/[0.035] p-3">
                       <p className="font-semibold text-white">{subscription.user.name}</p>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        Cancelled · {subscription.plan?.name ?? "Legacy plan"}
+                        Cancelled subscription
                       </p>
                     </div>
                   ))}
@@ -383,9 +359,7 @@ export default async function AdminPage() {
                     {users.map((user) => {
                       const subscription = user.subscriptions[0];
                       const hasTrial = Boolean(
-                        user.trialAccess?.status === "ACTIVE" &&
-                          user.trialAccess.endsAt &&
-                          user.trialAccess.endsAt > now,
+                        user.trialEndsAt && user.trialEndsAt > now,
                       );
                       const hasAccess =
                         subscription?.status === "ACTIVE" || hasTrial;
@@ -412,8 +386,8 @@ export default async function AdminPage() {
                             </Badge>
                           </td>
                           <td className="px-5 py-4 text-xs text-slate-400">
-                            {user.trialAccess?.endsAt
-                              ? formatTime(user.trialAccess.endsAt)
+                            {user.trialEndsAt
+                              ? formatTime(user.trialEndsAt)
                               : "--"}
                           </td>
                           <td className="px-5 py-4 text-xs text-slate-400">
